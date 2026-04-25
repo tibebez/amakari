@@ -40,6 +40,12 @@ void i18n.use(initReactI18next).init({
         language: "Language",
         signInHint:
           "Guest mode is enabled. Progress saves in this browser. Connect Supabase auth to sync across devices.",
+        uploadProcessTitle: "Upload a new process",
+        uploadProcessHint:
+          "Upload a JSON file containing one process guide or an array of process guides.",
+        uploadProcessCta: "Upload process JSON",
+        uploadProcessSuccess: "Successfully uploaded {{count}} process guide(s).",
+        uploadProcessError: "Upload failed. Please provide a valid ProcessGuide JSON file.",
       },
     },
     am: {
@@ -76,6 +82,11 @@ void i18n.use(initReactI18next).init({
         language: "ቋንቋ",
         signInHint:
           "የእንግዳ ሁነታ በርቷል። የእርስዎ ሂደት በዚህ ማሰሻ ውስጥ ይቀመጣል። በተለያዩ መሳሪያዎች ለማመሳሰል በSupabase ይግቡ።",
+        uploadProcessTitle: "አዲስ ሂደት ይጫኑ",
+        uploadProcessHint: "አንድ ሂደት መመሪያ ወይም የሂደት መመሪያዎች ዝርዝር ያለው JSON ፋይል ይጫኑ።",
+        uploadProcessCta: "የሂደት JSON ይጫኑ",
+        uploadProcessSuccess: "{{count}} የሂደት መመሪያ(ዎች) በተሳካ ሁኔታ ተጫኗል።",
+        uploadProcessError: "መጫን አልተሳካም። ትክክለኛ ProcessGuide JSON ፋይል ያቅርቡ።",
       },
     },
   },

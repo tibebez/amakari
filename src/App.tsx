@@ -1,12 +1,68 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { mockGuides } from "./data.mock";
 
 import type { ProcessGuide } from "./types";
 
 const PROGRESS_STORAGE_KEY = "process-path-progress";
+const USER_GUIDES_STORAGE_KEY = "process-path-user-guides";
 
 type ProgressByGuide = Record<string, Record<string, boolean>>;
+type UploadStatus = { type: "success" | "error"; message: string } | null;
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isProcessGuide(value: unknown): value is ProcessGuide {
+  if (!isObject(value)) {
+    return false;
+  }
+
+  const contactLinks = value.contactLinks;
+  const steps = value.steps;
+
+  return (
+    typeof value.id === "string" &&
+    typeof value.title === "string" &&
+    typeof value.category === "string" &&
+    typeof value.institution === "string" &&
+    typeof value.region === "string" &&
+    typeof value.language === "string" &&
+    typeof value.summary === "string" &&
+    isStringArray(value.prerequisites) &&
+    isStringArray(value.requiredDocuments) &&
+    typeof value.fees === "string" &&
+    typeof value.deadlines === "string" &&
+    typeof value.estimatedTime === "string" &&
+    Array.isArray(contactLinks) &&
+    contactLinks.every(
+      (link) => isObject(link) && typeof link.label === "string" && typeof link.url === "string",
+    ) &&
+    value.sourceType === "community-contributed" &&
+    typeof value.version === "number" &&
+    typeof value.updatedAt === "string" &&
+    (value.alternativeOf === undefined || typeof value.alternativeOf === "string") &&
+    Array.isArray(steps) &&
+    steps.every(
+      (step) =>
+        isObject(step) &&
+        typeof step.id === "string" &&
+        typeof step.title === "string" &&
+        typeof step.description === "string" &&
+        isStringArray(step.requiredDocuments) &&
+        typeof step.cost === "string" &&
+        typeof step.expectedDuration === "string" &&
+        (step.actionMode === "online" || step.actionMode === "offline") &&
+        typeof step.officeUrl === "string" &&
+        typeof step.sourceReferenceUrl === "string",
+    )
+  );
+}
 
 function getInitialProgress(): ProgressByGuide {
   const raw = localStorage.getItem(PROGRESS_STORAGE_KEY);
@@ -21,8 +77,30 @@ function getInitialProgress(): ProgressByGuide {
   }
 }
 
+function getInitialUserGuides(): ProcessGuide[] {
+  const raw = localStorage.getItem(USER_GUIDES_STORAGE_KEY);
+  if (!raw) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed.filter(isProcessGuide);
+  } catch {
+    return [];
+  }
+}
+
 function saveProgress(progress: ProgressByGuide): void {
   localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(progress));
+}
+
+function saveUserGuides(guides: ProcessGuide[]): void {
+  localStorage.setItem(USER_GUIDES_STORAGE_KEY, JSON.stringify(guides));
 }
 
 function checklistContent(guide: ProcessGuide, completed: Record<string, boolean>): string {
@@ -49,23 +127,44 @@ function uniqueBy<T>(values: T[]): T[] {
 
 export function App() {
   const { t, i18n } = useTranslation();
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
+
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("all");
   const [institution, setInstitution] = useState("all");
   const [region, setRegion] = useState("all");
   const [selectedGuideId, setSelectedGuideId] = useState<string | null>(null);
   const [progress, setProgress] = useState<ProgressByGuide>(() => getInitialProgress());
+  const [userGuides, setUserGuides] = useState<ProcessGuide[]>(() => getInitialUserGuides());
+  const [uploadStatus, setUploadStatus] = useState<UploadStatus>(null);
 
-  const useLocalStorage = true; // Switched to local storage
+  const useLocalStorage = true;
 
-  const categories = useMemo(() => uniqueBy(mockGuides.map((guide) => guide.category)), []);
-  const institutions = useMemo(() => uniqueBy(mockGuides.map((guide) => guide.institution)), []);
-  const regions = useMemo(() => uniqueBy(mockGuides.map((guide) => guide.region)), []);
+  const allGuides = useMemo(() => {
+    const byId = new Map<string, ProcessGuide>();
+
+    for (const guide of mockGuides) {
+      byId.set(guide.id, guide);
+    }
+
+    for (const guide of userGuides) {
+      byId.set(guide.id, guide);
+    }
+
+    return [...byId.values()];
+  }, [userGuides]);
+
+  const categories = useMemo(() => uniqueBy(allGuides.map((guide) => guide.category)), [allGuides]);
+  const institutions = useMemo(
+    () => uniqueBy(allGuides.map((guide) => guide.institution)),
+    [allGuides],
+  );
+  const regions = useMemo(() => uniqueBy(allGuides.map((guide) => guide.region)), [allGuides]);
 
   const filteredGuides = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
-    return mockGuides.filter((guide) => {
+    return allGuides.filter((guide) => {
       const matchesQuery =
         normalizedQuery.length === 0 ||
         guide.title.toLowerCase().includes(normalizedQuery) ||
@@ -78,7 +177,7 @@ export function App() {
 
       return matchesQuery && matchesCategory && matchesInstitution && matchesRegion;
     });
-  }, [category, institution, query, region]);
+  }, [allGuides, category, institution, query, region]);
 
   const selectedGuide = selectedGuideId
     ? (filteredGuides.find((guide) => guide.id === selectedGuideId) ?? null)
@@ -118,6 +217,47 @@ export function App() {
       saveProgress(nextProgress);
       return nextProgress;
     });
+  };
+
+  const handleGuideUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as unknown;
+      const uploadedGuides = Array.isArray(parsed) ? parsed : [parsed];
+
+      if (uploadedGuides.length === 0 || !uploadedGuides.every(isProcessGuide)) {
+        throw new Error("invalid-format");
+      }
+
+      setUserGuides((current) => {
+        const byId = new Map<string, ProcessGuide>(current.map((guide) => [guide.id, guide]));
+
+        for (const guide of uploadedGuides) {
+          byId.set(guide.id, guide);
+        }
+
+        const nextGuides = [...byId.values()];
+        saveUserGuides(nextGuides);
+        return nextGuides;
+      });
+
+      setUploadStatus({
+        type: "success",
+        message: t("uploadProcessSuccess", { count: uploadedGuides.length }),
+      });
+    } catch {
+      setUploadStatus({
+        type: "error",
+        message: t("uploadProcessError"),
+      });
+    } finally {
+      event.target.value = "";
+    }
   };
 
   const downloadChecklist = () => {
@@ -162,6 +302,36 @@ export function App() {
         <small>
           Local Storage: <strong>{useLocalStorage ? "enabled" : "disabled"}</strong>
         </small>
+      </section>
+
+      <section className="upload-panel" aria-live="polite">
+        <div>
+          <h2>{t("uploadProcessTitle")}</h2>
+          <p>{t("uploadProcessHint")}</p>
+        </div>
+        <div className="upload-actions">
+          <input
+            ref={uploadInputRef}
+            className="upload-input"
+            type="file"
+            accept=".json,application/json"
+            onChange={(event) => {
+              void handleGuideUpload(event);
+            }}
+          />
+          <button
+            type="button"
+            className="upload-trigger"
+            onClick={() => uploadInputRef.current?.click()}
+          >
+            {t("uploadProcessCta")}
+          </button>
+        </div>
+        {uploadStatus ? (
+          <p className={`upload-message upload-message-${uploadStatus.type}`}>
+            {uploadStatus.message}
+          </p>
+        ) : null}
       </section>
 
       <section className="layout">
