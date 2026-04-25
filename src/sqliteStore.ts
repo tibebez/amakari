@@ -5,6 +5,7 @@ import { mockGuides } from "./data.mock";
 import type { ProcessGuide } from "./types";
 
 const DB_STORAGE_KEY = "amakari-sqlite-db-v1";
+const RESET_DB_ADMIN_MOCK_FLAG = "reset-db-admin-mock-v1";
 const LEGACY_MIGRATION_FLAG = "legacy-localstorage-migrated-v1";
 const SEED_ADMIN_MOCK_FLAG = "seed-admin-mock-v1";
 const LEGACY_PROGRESS_KEY = "process-path-progress";
@@ -34,6 +35,10 @@ type PersistedState = {
 };
 
 let dbPromise: Promise<Database> | null = null;
+
+function normalizeUsername(username: string): string {
+  return username.trim().toLowerCase();
+}
 
 function toBase64(bytes: Uint8Array): string {
   let binary = "";
@@ -209,6 +214,15 @@ async function getDb(): Promise<Database> {
   }
 
   dbPromise = (async () => {
+    // One-time hard reset so the app starts from a clean DB, then reseeds admin + mock guides.
+    if (!localStorage.getItem(RESET_DB_ADMIN_MOCK_FLAG)) {
+      localStorage.removeItem(DB_STORAGE_KEY);
+      localStorage.removeItem(LEGACY_PROGRESS_KEY);
+      localStorage.removeItem(LEGACY_USER_GUIDES_KEY);
+      localStorage.removeItem(LEGACY_FAVORITES_KEY);
+      localStorage.setItem(RESET_DB_ADMIN_MOCK_FLAG, "true");
+    }
+
     const SQL = await initSqlJs({
       locateFile: () => sqlWasmUrl,
     });
@@ -350,13 +364,15 @@ export async function saveUserGuides(guides: ProcessGuide[]): Promise<void> {
 
 export async function createAccount(username: string, password: string): Promise<AuthUser> {
   const db = await getDb();
-  const normalizedUsername = username.trim();
+  const normalizedUsername = normalizeUsername(username);
 
   if (!normalizedUsername || !password.trim()) {
     throw new Error("invalid-credentials");
   }
 
-  const existingStmt = db.prepare("select username from app_users where username = ? limit 1");
+  const existingStmt = db.prepare(
+    "select username from app_users where lower(username) = ? limit 1",
+  );
   existingStmt.bind([normalizedUsername]);
   const hasExistingUser = existingStmt.step();
   existingStmt.free();
@@ -378,9 +394,9 @@ export async function createAccount(username: string, password: string): Promise
 
 export async function signIn(username: string, password: string): Promise<AuthUser> {
   const db = await getDb();
-  const normalizedUsername = username.trim();
+  const normalizedUsername = normalizeUsername(username);
   const stmt = db.prepare(
-    "select username from app_users where username = ? and password = ? limit 1",
+    "select username from app_users where lower(username) = ? and password = ? limit 1",
   );
   stmt.bind([normalizedUsername, password]);
   const isValid = stmt.step();

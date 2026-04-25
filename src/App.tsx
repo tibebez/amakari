@@ -116,6 +116,10 @@ function uniqueBy<T>(values: T[]): T[] {
   return [...new Set(values)];
 }
 
+function normalizeIdentity(value: string | null | undefined): string {
+  return value?.trim().toLowerCase() ?? "";
+}
+
 function createMessage(role: ChatMessage["role"], content: string): ChatMessage {
   return {
     id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -335,15 +339,18 @@ export function App() {
     ? (allGuides.find((guide) => guide.id === selectedGuideId) ?? null)
     : null;
   const selectedGuideOwner = selectedGuide?.createdBy?.trim() ?? "";
+  const selectedGuideOwnerIdentity = normalizeIdentity(selectedGuide?.createdBy);
+  const currentUserIdentity = normalizeIdentity(currentUser?.username);
   const isSelectedGuideOwner = Boolean(
     selectedGuide &&
-    currentUser &&
-    selectedGuideOwner &&
-    currentUser.username === selectedGuideOwner,
+    selectedGuideOwnerIdentity &&
+    currentUserIdentity === selectedGuideOwnerIdentity,
   );
-  const guidesFromSelectedOwner = selectedGuideOwner
+  const guidesFromSelectedOwner = selectedGuideOwnerIdentity
     ? allGuides.filter(
-        (guide) => guide.createdBy === selectedGuideOwner && guide.id !== selectedGuide?.id,
+        (guide) =>
+          normalizeIdentity(guide.createdBy) === selectedGuideOwnerIdentity &&
+          guide.id !== selectedGuide?.id,
       )
     : [];
 
@@ -360,7 +367,7 @@ export function App() {
 
   const selectedProgress = selectedGuide ? (progress[selectedGuide.id] ?? {}) : {};
   const selectedGuideFeedback = selectedGuide
-    ? guideFeedback.filter((entry) => entry.guideId === selectedGuide.id)
+    ? guideFeedback.filter((entry) => entry.guideId.trim() === selectedGuide.id.trim())
     : [];
 
   useEffect(() => {
@@ -1086,9 +1093,9 @@ export function App() {
                       />
                       <button type="submit">{t("chatSend")}</button>
                     </form>
-                  ) : (
+                  ) : !currentUser ? (
                     <p className="auth-feed-hint">{t("authRequiredFeedback")}</p>
-                  )}
+                  ) : null}
 
                   <div className="chat-thread" ref={feedbackThreadRef} aria-live="polite">
                     {selectedGuideFeedback.length > 0 ? (
@@ -1106,7 +1113,7 @@ export function App() {
                   </div>
                 </section>
 
-                {selectedGuideOwner ? (
+                {selectedGuideOwner && !isSelectedGuideOwner ? (
                   <section className="chat-panel">
                     <div className="chat-panel-header">
                       <h3>{t("ownerOtherProcesses", { username: selectedGuideOwner })}</h3>
