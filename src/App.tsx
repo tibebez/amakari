@@ -9,6 +9,12 @@ const USER_GUIDES_STORAGE_KEY = "process-path-user-guides";
 
 type ProgressByGuide = Record<string, Record<string, boolean>>;
 type UploadStatus = { type: "success" | "error"; message: string } | null;
+type ChatMessage = {
+  id: string;
+  role: "assistant" | "user";
+  content: string;
+};
+type ChatByGuide = Record<string, ChatMessage[]>;
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
@@ -125,9 +131,18 @@ function uniqueBy<T>(values: T[]): T[] {
   return [...new Set(values)];
 }
 
+function createMessage(role: ChatMessage["role"], content: string): ChatMessage {
+  return {
+    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    role,
+    content,
+  };
+}
+
 export function App() {
   const { t, i18n } = useTranslation();
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
+  const chatThreadRef = useRef<HTMLDivElement | null>(null);
 
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("all");
@@ -137,6 +152,8 @@ export function App() {
   const [progress, setProgress] = useState<ProgressByGuide>(() => getInitialProgress());
   const [userGuides, setUserGuides] = useState<ProcessGuide[]>(() => getInitialUserGuides());
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>(null);
+  const [chatByGuide, setChatByGuide] = useState<ChatByGuide>({});
+  const [chatInput, setChatInput] = useState("");
 
   const useLocalStorage = true;
 
@@ -194,7 +211,40 @@ export function App() {
     }
   }, [filteredGuides, selectedGuideId]);
 
+  useEffect(() => {
+    if (!selectedGuide) {
+      return;
+    }
+
+    setChatByGuide((current) => {
+      if (current[selectedGuide.id]) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [selectedGuide.id]: [
+          createMessage("assistant", t("chatWelcome", { title: selectedGuide.title })),
+        ],
+      };
+    });
+
+    setChatInput("");
+  }, [selectedGuide, t]);
+
   const selectedProgress = selectedGuide ? (progress[selectedGuide.id] ?? {}) : {};
+  const selectedChat = selectedGuide ? (chatByGuide[selectedGuide.id] ?? []) : [];
+
+  useEffect(() => {
+    if (!chatThreadRef.current) {
+      return;
+    }
+
+    chatThreadRef.current.scrollTo({
+      top: chatThreadRef.current.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [selectedGuide?.id, selectedChat.length]);
 
   const completedSteps = selectedGuide
     ? selectedGuide.steps.filter((step) => selectedProgress[step.id]).length
@@ -273,6 +323,79 @@ export function App() {
     anchor.download = `${selectedGuide.id}-checklist.txt`;
     anchor.click();
     URL.revokeObjectURL(url);
+  };
+
+  const buildAssistantReply = (question: string, guide: ProcessGuide): string => {
+    const normalized = question.toLowerCase();
+    const nextStep = guide.steps.find((step) => !selectedProgress[step.id]);
+
+    if (normalized.includes("document") || normalized.includes("ሰነድ")) {
+      return t("chatReplyDocuments", { documents: guide.requiredDocuments.join(", ") });
+    }
+
+    if (normalized.includes("fee") || normalized.includes("cost") || normalized.includes("ዋጋ")) {
+      return t("chatReplyFees", { fees: guide.fees });
+    }
+
+    if (
+      normalized.includes("time") ||
+      normalized.includes("long") ||
+      normalized.includes("duration") ||
+      normalized.includes("ጊዜ")
+    ) {
+      return t("chatReplyTimeline", { duration: guide.estimatedTime });
+    }
+
+    if (
+      normalized.includes("contact") ||
+      normalized.includes("help") ||
+      normalized.includes("እገዛ")
+    ) {
+      const contacts = guide.contactLinks.map((link) => link.label).join(", ");
+      return t("chatReplyContact", { contacts: contacts || t("chatReplyContactFallback") });
+    }
+
+    if (
+      normalized.includes("next") ||
+      normalized.includes("start") ||
+      normalized.includes("step") ||
+      normalized.includes("ምን")
+    ) {
+      return t("chatReplyNextStep", {
+        step: nextStep?.title ?? guide.steps[guide.steps.length - 1]?.title ?? guide.title,
+      });
+    }
+
+    return t("chatReplyDefault", {
+      step: nextStep?.title ?? guide.steps[guide.steps.length - 1]?.title ?? guide.title,
+    });
+  };
+
+  const sendChatMessage = () => {
+    if (!selectedGuide) {
+      return;
+    }
+
+    const question = chatInput.trim();
+    if (!question) {
+      return;
+    }
+
+    const userMessage = createMessage("user", question);
+    const assistantMessage = createMessage(
+      "assistant",
+      buildAssistantReply(question, selectedGuide),
+    );
+
+    setChatByGuide((current) => {
+      const currentThread = current[selectedGuide.id] ?? [];
+      return {
+        ...current,
+        [selectedGuide.id]: [...currentThread, userMessage, assistantMessage],
+      };
+    });
+
+    setChatInput("");
   };
 
   return (
@@ -516,6 +639,44 @@ export function App() {
                     </button>
                   </div>
                 </div>
+
+                <section className="chat-panel">
+                  <div className="chat-panel-header">
+                    <h3>{t("chatTitle")}</h3>
+                    <p>{t("chatHint")}</p>
+                  </div>
+
+                  <div className="chat-thread" ref={chatThreadRef} aria-live="polite">
+                    {selectedChat.map((message) => (
+                      <article
+                        key={message.id}
+                        className={`chat-message chat-message-${message.role}`}
+                      >
+                        <small>
+                          {message.role === "assistant"
+                            ? t("chatAssistantLabel")
+                            : t("chatUserLabel")}
+                        </small>
+                        <p>{message.content}</p>
+                      </article>
+                    ))}
+                  </div>
+
+                  <form
+                    className="chat-form"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      sendChatMessage();
+                    }}
+                  >
+                    <input
+                      value={chatInput}
+                      onChange={(event) => setChatInput(event.target.value)}
+                      placeholder={t("chatPlaceholder")}
+                    />
+                    <button type="submit">{t("chatSend")}</button>
+                  </form>
+                </section>
 
                 <ol className="step-list">
                   {selectedGuide.steps.map((step) => (
