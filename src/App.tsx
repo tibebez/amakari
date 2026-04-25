@@ -1,3 +1,5 @@
+import { generateText } from "ai";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { mockGuides } from "./data.mock";
@@ -6,6 +8,7 @@ import type { ProcessGuide } from "./types";
 
 const PROGRESS_STORAGE_KEY = "process-path-progress";
 const USER_GUIDES_STORAGE_KEY = "process-path-user-guides";
+const FAVORITES_STORAGE_KEY = "process-path-favorite-guides";
 
 type ProgressByGuide = Record<string, Record<string, boolean>>;
 type UploadStatus = { type: "success" | "error"; message: string } | null;
@@ -15,6 +18,19 @@ type ChatMessage = {
   content: string;
 };
 type ChatByGuide = Record<string, ChatMessage[]>;
+type ProcessReference = {
+  id: string;
+  title: string;
+  institution: string;
+  region: string;
+};
+type FloatingChatMessage = ChatMessage & {
+  references?: ProcessReference[];
+};
+type AiAggregatedReply = {
+  answer: string;
+  references: ProcessReference[];
+};
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
@@ -109,6 +125,24 @@ function saveUserGuides(guides: ProcessGuide[]): void {
   localStorage.setItem(USER_GUIDES_STORAGE_KEY, JSON.stringify(guides));
 }
 
+function getInitialFavoriteGuideIds(): string[] {
+  const raw = localStorage.getItem(FAVORITES_STORAGE_KEY);
+  if (!raw) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return isStringArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveFavoriteGuideIds(guideIds: string[]): void {
+  localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(guideIds));
+}
+
 function checklistContent(guide: ProcessGuide, completed: Record<string, boolean>): string {
   const lines = [
     `${guide.title} (${guide.region})`,
@@ -139,10 +173,100 @@ function createMessage(role: ChatMessage["role"], content: string): ChatMessage 
   };
 }
 
+function toProcessReference(guide: ProcessGuide): ProcessReference {
+  return {
+    id: guide.id,
+    title: guide.title,
+    institution: guide.institution,
+    region: guide.region,
+  };
+}
+
+function getGuideRelevanceScore(question: string, guide: ProcessGuide): number {
+  const normalizedQuestion = question.toLowerCase();
+  const keywords = normalizedQuestion
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 2);
+
+  if (keywords.length === 0) {
+    return 0;
+  }
+
+  const titleText = guide.title.toLowerCase();
+  const summaryText = guide.summary.toLowerCase();
+  const categoryText = guide.category.toLowerCase();
+  const institutionText = guide.institution.toLowerCase();
+  const regionText = guide.region.toLowerCase();
+  const docsText = guide.requiredDocuments.join(" ").toLowerCase();
+  const prerequisiteText = guide.prerequisites.join(" ").toLowerCase();
+  const stepText = guide.steps
+    .map((step) => `${step.title} ${step.description} ${step.requiredDocuments.join(" ")}`)
+    .join(" ")
+    .toLowerCase();
+
+  let score = 0;
+
+  for (const keyword of keywords) {
+    if (titleText.includes(keyword)) score += 6;
+    if (summaryText.includes(keyword)) score += 4;
+    if (categoryText.includes(keyword)) score += 3;
+    if (institutionText.includes(keyword)) score += 2;
+    if (regionText.includes(keyword)) score += 2;
+    if (docsText.includes(keyword)) score += 2;
+    if (prerequisiteText.includes(keyword)) score += 2;
+    if (stepText.includes(keyword)) score += 1;
+  }
+
+  return score;
+}
+
+function parseAiAggregatedReply(
+  rawText: string,
+  fallbackReferences: ProcessReference[],
+): AiAggregatedReply {
+  const codeBlockMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = codeBlockMatch?.[1]?.trim() ?? rawText.trim();
+
+  try {
+    const parsed = JSON.parse(candidate) as unknown;
+    if (isObject(parsed) && typeof parsed.answer === "string" && Array.isArray(parsed.references)) {
+      const safeReferences = parsed.references
+        .filter(
+          (reference) =>
+            isObject(reference) &&
+            typeof reference.id === "string" &&
+            typeof reference.title === "string" &&
+            typeof reference.institution === "string" &&
+            typeof reference.region === "string",
+        )
+        .map((reference) => ({
+          id: reference.id,
+          title: reference.title,
+          institution: reference.institution,
+          region: reference.region,
+        }));
+
+      return {
+        answer: parsed.answer,
+        references: safeReferences.length > 0 ? safeReferences : fallbackReferences,
+      };
+    }
+  } catch {
+    // keep fallback below
+  }
+
+  return {
+    answer: rawText,
+    references: fallbackReferences,
+  };
+}
+
 export function App() {
   const { t, i18n } = useTranslation();
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const chatThreadRef = useRef<HTMLDivElement | null>(null);
+  const floatingChatThreadRef = useRef<HTMLDivElement | null>(null);
 
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("all");
@@ -154,6 +278,19 @@ export function App() {
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>(null);
   const [chatByGuide, setChatByGuide] = useState<ChatByGuide>({});
   const [chatInput, setChatInput] = useState("");
+  const [favoriteGuideIds, setFavoriteGuideIds] = useState<string[]>(() =>
+    getInitialFavoriteGuideIds(),
+  );
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [isFloatingChatOpen, setIsFloatingChatOpen] = useState(false);
+  const [isFloatingChatLoading, setIsFloatingChatLoading] = useState(false);
+  const [floatingChatInput, setFloatingChatInput] = useState("");
+  const [floatingChatMessages, setFloatingChatMessages] = useState<FloatingChatMessage[]>(() => [
+    createMessage(
+      "assistant",
+      "Hi! I can search across multiple process guides and give you one aggregated answer.",
+    ),
+  ]);
 
   const useLocalStorage = true;
 
@@ -171,6 +308,8 @@ export function App() {
     return [...byId.values()];
   }, [userGuides]);
 
+  const favoriteGuideIdSet = useMemo(() => new Set(favoriteGuideIds), [favoriteGuideIds]);
+
   const categories = useMemo(() => uniqueBy(allGuides.map((guide) => guide.category)), [allGuides]);
   const institutions = useMemo(
     () => uniqueBy(allGuides.map((guide) => guide.institution)),
@@ -181,20 +320,34 @@ export function App() {
   const filteredGuides = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
-    return allGuides.filter((guide) => {
-      const matchesQuery =
-        normalizedQuery.length === 0 ||
-        guide.title.toLowerCase().includes(normalizedQuery) ||
-        guide.summary.toLowerCase().includes(normalizedQuery) ||
-        guide.category.toLowerCase().includes(normalizedQuery);
+    return allGuides
+      .filter((guide) => {
+        const matchesQuery =
+          normalizedQuery.length === 0 ||
+          guide.title.toLowerCase().includes(normalizedQuery) ||
+          guide.summary.toLowerCase().includes(normalizedQuery) ||
+          guide.category.toLowerCase().includes(normalizedQuery);
 
-      const matchesCategory = category === "all" || guide.category === category;
-      const matchesInstitution = institution === "all" || guide.institution === institution;
-      const matchesRegion = region === "all" || guide.region === region;
+        const matchesCategory = category === "all" || guide.category === category;
+        const matchesInstitution = institution === "all" || guide.institution === institution;
+        const matchesRegion = region === "all" || guide.region === region;
+        const matchesFavorites = !favoritesOnly || favoriteGuideIdSet.has(guide.id);
 
-      return matchesQuery && matchesCategory && matchesInstitution && matchesRegion;
-    });
-  }, [allGuides, category, institution, query, region]);
+        return (
+          matchesQuery && matchesCategory && matchesInstitution && matchesRegion && matchesFavorites
+        );
+      })
+      .sort((a, b) => {
+        const favoriteDelta =
+          Number(favoriteGuideIdSet.has(b.id)) - Number(favoriteGuideIdSet.has(a.id));
+
+        if (favoriteDelta !== 0) {
+          return favoriteDelta;
+        }
+
+        return a.title.localeCompare(b.title);
+      });
+  }, [allGuides, category, favoriteGuideIdSet, favoritesOnly, institution, query, region]);
 
   const selectedGuide = selectedGuideId
     ? (filteredGuides.find((guide) => guide.id === selectedGuideId) ?? null)
@@ -246,6 +399,17 @@ export function App() {
     });
   }, [selectedGuide?.id, selectedChat.length]);
 
+  useEffect(() => {
+    if (!floatingChatThreadRef.current) {
+      return;
+    }
+
+    floatingChatThreadRef.current.scrollTo({
+      top: floatingChatThreadRef.current.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [floatingChatMessages.length, isFloatingChatOpen]);
+
   const completedSteps = selectedGuide
     ? selectedGuide.steps.filter((step) => selectedProgress[step.id]).length
     : 0;
@@ -266,6 +430,15 @@ export function App() {
       };
       saveProgress(nextProgress);
       return nextProgress;
+    });
+  };
+
+  const toggleFavoriteGuide = (guideId: string) => {
+    setFavoriteGuideIds((current) => {
+      const isFavorite = current.includes(guideId);
+      const next = isFavorite ? current.filter((id) => id !== guideId) : [...current, guideId];
+      saveFavoriteGuideIds(next);
+      return next;
     });
   };
 
@@ -398,6 +571,114 @@ export function App() {
     setChatInput("");
   };
 
+  const openGuideFromReference = (guideId: string) => {
+    setQuery("");
+    setCategory("all");
+    setInstitution("all");
+    setRegion("all");
+    setSelectedGuideId(guideId);
+  };
+
+  const sendFloatingChatMessage = async () => {
+    const question = floatingChatInput.trim();
+    if (!question || isFloatingChatLoading) {
+      return;
+    }
+
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
+    const matchedGuides = allGuides
+      .map((guide) => ({
+        guide,
+        score: getGuideRelevanceScore(question, guide) + (favoriteGuideIdSet.has(guide.id) ? 3 : 0),
+      }))
+      .filter((item) => item.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5)
+      .map((item) => item.guide);
+
+    const fallbackReferences = matchedGuides.map(toProcessReference);
+
+    const userMessage = createMessage("user", question);
+    setFloatingChatMessages((current) => [...current, userMessage]);
+    setFloatingChatInput("");
+
+    if (!apiKey) {
+      setFloatingChatMessages((current) => [
+        ...current,
+        {
+          ...createMessage("assistant", t("floatingChatMissingKey")),
+          references: fallbackReferences,
+        },
+      ]);
+      return;
+    }
+
+    if (matchedGuides.length === 0) {
+      setFloatingChatMessages((current) => [
+        ...current,
+        createMessage("assistant", t("floatingChatNoSourceMatch")),
+      ]);
+      return;
+    }
+
+    setIsFloatingChatLoading(true);
+
+    try {
+      const sourceContext = matchedGuides
+        .map((guide) => {
+          const steps = guide.steps
+            .map(
+              (step) =>
+                `- ${step.title}: ${step.description} | Docs: ${step.requiredDocuments.join(", ")}`,
+            )
+            .join("\n");
+
+          return [
+            `Guide ID: ${guide.id}`,
+            `Title: ${guide.title}`,
+            `Institution: ${guide.institution}`,
+            `Region: ${guide.region}`,
+            `Category: ${guide.category}`,
+            `Summary: ${guide.summary}`,
+            `Prerequisites: ${guide.prerequisites.join(", ")}`,
+            `Required documents: ${guide.requiredDocuments.join(", ")}`,
+            `Fees: ${guide.fees}`,
+            `Deadlines: ${guide.deadlines}`,
+            `Estimated time: ${guide.estimatedTime}`,
+            "Steps:",
+            steps,
+          ].join("\n");
+        })
+        .join("\n\n---\n\n");
+
+      const google = createGoogleGenerativeAI({ apiKey });
+      const result = await generateText({
+        model: google("gemini-2.5-flash"),
+        system:
+          'You are an assistant that aggregates multiple process sources into one concise response. Return valid JSON only with this shape: {"answer": string, "references": [{"id": string, "title": string, "institution": string, "region": string}]}. In the answer, mention key differences across sources when relevant.',
+        prompt: `User question:\n${question}\n\nProcess sources:\n${sourceContext}\n\nReturn an aggregated answer and include only references from the provided sources.`,
+      });
+
+      const parsed = parseAiAggregatedReply(result.text, fallbackReferences);
+      const assistantMessage: FloatingChatMessage = {
+        ...createMessage("assistant", parsed.answer),
+        references: parsed.references,
+      };
+
+      setFloatingChatMessages((current) => [...current, assistantMessage]);
+    } catch {
+      setFloatingChatMessages((current) => [
+        ...current,
+        {
+          ...createMessage("assistant", t("floatingChatError")),
+          references: fallbackReferences,
+        },
+      ]);
+    } finally {
+      setIsFloatingChatLoading(false);
+    }
+  };
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -503,6 +784,14 @@ export function App() {
                   </option>
                 ))}
               </select>
+              <label className="favorites-only-toggle">
+                <input
+                  type="checkbox"
+                  checked={favoritesOnly}
+                  onChange={(event) => setFavoritesOnly(event.target.checked)}
+                />
+                <span>{t("favoritesOnly")}</span>
+              </label>
             </div>
           </div>
 
@@ -513,6 +802,7 @@ export function App() {
                 (step) => guideProgress[step.id],
               ).length;
               const guidePercent = Math.round((guideCompletedSteps / guide.steps.length) * 100);
+              const isFavorite = favoriteGuideIdSet.has(guide.id);
 
               return (
                 <button
@@ -523,7 +813,10 @@ export function App() {
                   onClick={() => setSelectedGuideId(guide.id)}
                 >
                   <div className="guide-card-main">
-                    <strong>{guide.title}</strong>
+                    <div className="guide-card-title-row">
+                      <strong>{guide.title}</strong>
+                      {isFavorite ? <span className="favorite-pill">★ {t("favorite")}</span> : null}
+                    </div>
                     <small>
                       {guide.institution} • {guide.region}
                     </small>
@@ -548,13 +841,22 @@ export function App() {
             <dialog className="dialog-sidebar" open onClick={(e) => e.stopPropagation()}>
               <div className="dialog-header">
                 <h2>{selectedGuide.title}</h2>
-                <button
-                  type="button"
-                  className="close-btn"
-                  onClick={() => setSelectedGuideId(null)}
-                >
-                  ×
-                </button>
+                <div className="dialog-header-actions">
+                  <button
+                    type="button"
+                    className={`favorite-btn ${favoriteGuideIdSet.has(selectedGuide.id) ? "is-favorite" : ""}`}
+                    onClick={() => toggleFavoriteGuide(selectedGuide.id)}
+                  >
+                    {favoriteGuideIdSet.has(selectedGuide.id) ? t("unfavorite") : t("favorite")}
+                  </button>
+                  <button
+                    type="button"
+                    className="close-btn"
+                    onClick={() => setSelectedGuideId(null)}
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
               <div className="dialog-content">
                 <p className="summary-text">{selectedGuide.summary}</p>
@@ -727,6 +1029,85 @@ export function App() {
           </div>
         )}
       </section>
+
+      <div className="floating-chat-root">
+        {isFloatingChatOpen ? (
+          <section className="floating-chat-panel" aria-label={t("floatingChatTitle")}>
+            <div className="floating-chat-header">
+              <div>
+                <h2>{t("floatingChatTitle")}</h2>
+                <p>{t("floatingChatHint")}</p>
+              </div>
+              <button
+                type="button"
+                className="floating-chat-close"
+                onClick={() => setIsFloatingChatOpen(false)}
+                aria-label={t("floatingChatClose")}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="floating-chat-thread" ref={floatingChatThreadRef} aria-live="polite">
+              {floatingChatMessages.map((message) => {
+                const references = message.references;
+                return (
+                  <article key={message.id} className={`chat-message chat-message-${message.role}`}>
+                    <small>
+                      {message.role === "assistant" ? t("chatAssistantLabel") : t("chatUserLabel")}
+                    </small>
+                    <p>{message.content}</p>
+                    {message.role === "assistant" && references && references.length > 0 ? (
+                      <footer className="floating-chat-references">
+                        <strong>{t("floatingChatReferences")}</strong>
+                        <ul>
+                          {references.map((reference) => (
+                            <li key={`${message.id}-${reference.id}`}>
+                              <button
+                                type="button"
+                                className="floating-chat-reference-link"
+                                onClick={() => openGuideFromReference(reference.id)}
+                              >
+                                {reference.title} · {reference.institution} ({reference.region})
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </footer>
+                    ) : null}
+                  </article>
+                );
+              })}
+            </div>
+
+            <form
+              className="chat-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void sendFloatingChatMessage();
+              }}
+            >
+              <input
+                value={floatingChatInput}
+                onChange={(event) => setFloatingChatInput(event.target.value)}
+                placeholder={t("floatingChatPlaceholder")}
+                disabled={isFloatingChatLoading}
+              />
+              <button type="submit" disabled={isFloatingChatLoading}>
+                {isFloatingChatLoading ? t("floatingChatThinking") : t("chatSend")}
+              </button>
+            </form>
+          </section>
+        ) : null}
+
+        <button
+          type="button"
+          className="floating-chat-trigger"
+          onClick={() => setIsFloatingChatOpen((current) => !current)}
+        >
+          {isFloatingChatOpen ? t("floatingChatClose") : t("floatingChatOpen")}
+        </button>
+      </div>
     </main>
   );
 }

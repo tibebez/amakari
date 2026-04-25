@@ -16,6 +16,9 @@ void i18n.use(initReactI18next).init({
         institution: "Institution",
         region: "Region",
         all: "All",
+        favoritesOnly: "Favorites only",
+        favorite: "Favorite",
+        unfavorite: "Unfavorite",
         noResults: "No guides match your filters.",
         steps: "Steps",
         processDetails: "Process details",
@@ -62,6 +65,20 @@ void i18n.use(initReactI18next).init({
         chatReplyNextStep: "Your next recommended step is: {{step}}.",
         chatReplyDefault:
           "A good next move is: {{step}}. If you want, ask about documents, cost, or timeline.",
+        floatingChatTitle: "AI process finder",
+        floatingChatHint:
+          "Ask once and I will combine multiple process sources into one clear answer.",
+        floatingChatOpen: "Ask AI",
+        floatingChatClose: "Close",
+        floatingChatPlaceholder: "Ask across all process sources...",
+        floatingChatThinking: "Thinking...",
+        floatingChatReferences: "Referenced processes",
+        floatingChatMissingKey:
+          "AI key is missing. Set VITE_GEMINI_API_KEY to enable Gemini responses.",
+        floatingChatNoSourceMatch:
+          "I could not find matching process sources. Try adding more detail like institution, category, or document name.",
+        floatingChatError:
+          "I could not generate an answer right now. Please try again in a moment.",
       },
     },
     am: {
@@ -74,6 +91,9 @@ void i18n.use(initReactI18next).init({
         institution: "ተቋም",
         region: "ክልል",
         all: "ሁሉም",
+        favoritesOnly: "ተወዳጆች ብቻ",
+        favorite: "ተወዳጅ",
+        unfavorite: "ከተወዳጅ አስወግድ",
         noResults: "በእነዚህ ማጣሪያዎች ምንም መመሪያ አልተገኘም።",
         steps: "ደረጃዎች",
         processDetails: "የሂደቱ ዝርዝሮች",
@@ -117,6 +137,17 @@ void i18n.use(initReactI18next).init({
         chatReplyContactFallback: "በዚህ መመሪያ ውስጥ ያሉ ኦፊሴላዊ የእውቂያ አገናኞች",
         chatReplyNextStep: "የሚመከረው ቀጣይ እርምጃ: {{step}}።",
         chatReplyDefault: "ጥሩ ቀጣይ እርምጃ: {{step}}። ከፈለጉ ስለ ሰነዶች፣ ክፍያ ወይም ጊዜ ይጠይቁ።",
+        floatingChatTitle: "የAI ሂደት ፈላጊ",
+        floatingChatHint: "አንድ ጥያቄ ይጠይቁ፣ ብዙ የሂደት ምንጮችን በአንድ መልስ እሰብስባለሁ።",
+        floatingChatOpen: "AI ይጠይቁ",
+        floatingChatClose: "ዝጋ",
+        floatingChatPlaceholder: "በሁሉም የሂደት ምንጮች ላይ ጥያቄ ይጠይቁ...",
+        floatingChatThinking: "እያሰበ ነው...",
+        floatingChatReferences: "የተጠቀሱ ሂደቶች",
+        floatingChatMissingKey: "የAI ቁልፍ አልተገኘም። Gemini ለማስጀመር VITE_GEMINI_API_KEY ያዘጋጁ።",
+        floatingChatNoSourceMatch:
+          "ተዛማጅ የሂደት ምንጮች አልተገኙም። ተቋም፣ ምድብ ወይም የሰነድ ስም እንደ ተጨማሪ ዝርዝር ይጨምሩ።",
+        floatingChatError: "አሁን መልስ ማመንጨት አልቻልኩም። እባክዎ ትንሽ ቆይተው ይሞክሩ።",
       },
     },
   },

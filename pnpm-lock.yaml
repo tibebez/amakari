@@ -18,12 +18,18 @@ importers:
 
   .:
     dependencies:
+      '@ai-sdk/google':
+        specifier: ^3.0.64
+        version: 3.0.64(zod@4.3.6)
       '@radix-ui/react-dialog':
         specifier: ^1.1.15
         version: 1.1.15(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@radix-ui/react-slot':
         specifier: ^1.2.4
         version: 1.2.4(@types/react@19.2.14)(react@19.2.5)
+      ai:
+        specifier: ^6.0.168
+        version: 6.0.168(zod@4.3.6)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -66,13 +72,39 @@ importers:
         version: '@voidzero-dev/vite-plus-core@0.1.19(@types/node@25.6.0)(typescript@6.0.3)'
       vite-plus:
         specifier: 'catalog:'
-        version: 0.1.19(@types/node@25.6.0)(@voidzero-dev/vite-plus-core@0.1.19(@types/node@25.6.0)(typescript@6.0.3))(typescript@6.0.3)
+        version: 0.1.19(@opentelemetry/api@1.9.0)(@types/node@25.6.0)(@voidzero-dev/vite-plus-core@0.1.19(@types/node@25.6.0)(typescript@6.0.3))(typescript@6.0.3)
 
 packages:
+
+  '@ai-sdk/gateway@3.0.104':
+    resolution: {integrity: sha512-ZKX5n74io8VIRlhIMSLWVlvT3sXC8Z7cZ9GHuWBWZDVi96+62AIsWuLGvMfcBA1STYuSoDrp6rIziZmvrTq0TA==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/google@3.0.64':
+    resolution: {integrity: sha512-CbR82EgGPNrj/6q0HtclwuCqe0/pDShyv3nWDP/A9DroujzWXnLMlUJVrgPOsg4b40zQCwwVs2XSKCxvt/4QaA==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/provider-utils@4.0.23':
+    resolution: {integrity: sha512-z8GlDaCmRSDlqkMF2f4/RFgWxdarvIbyuk+m6WXT1LYgsnGiXRJGTD2Z1+SDl3LqtFuRtGX1aghYvQLoHL/9pg==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/provider@3.0.8':
+    resolution: {integrity: sha512-oGMAgGoQdBXbZqNG0Ze56CHjDZ1IDYOwGYxYjO5KLSlz5HiNQ9udIXsPZ61VWaHGZ5XW/jyjmr6t2xz2jGVwbQ==}
+    engines: {node: '>=18'}
 
   '@babel/runtime@7.29.2':
     resolution: {integrity: sha512-JiDShH45zKHWyGe4ZNVRrCjBz8Nh9TMmZG1kh4QTK8hCBTWBi8Da+i7s1fJw7/lYpM4ccepSNfqzZ/QvABBi5g==}
     engines: {node: '>=6.9.0'}
+
+  '@opentelemetry/api@1.9.0':
+    resolution: {integrity: sha512-3giAOQvZiH5F9bMlMiv8+GSPMeqg0dbaeo58/0SlA9sxSqZhnUtxzX9/2FzyhS9sWQf5S0GJE0AKBrFqjpeYcg==}
+    engines: {node: '>=8.0.0'}
 
   '@oxc-project/runtime@0.126.0':
     resolution: {integrity: sha512-oksjxfqDNmIYMGlIgLzYgnz5YjZax27RtQezsPpKEGo9AC5LOaIGHsivCCeaAWdCtPnRyjZXM/7svreCC8kZVQ==}
@@ -561,6 +593,10 @@ packages:
   '@types/react@19.2.14':
     resolution: {integrity: sha512-ilcTH/UniCkMdtexkoCN0bI7pMcJDvmQFPvuPvmEaYA/NSfFTAgdUSLAoVjaRJm7+6PvcM+q1zYOwS4wTYMF9w==}
 
+  '@vercel/oidc@3.2.0':
+    resolution: {integrity: sha512-UycprH3T6n3jH0k44NHMa7pnFHGu/N05MjojYr+Mc6I7obkoLIJujSWwin1pCvdy/eOxrI/l3uDLQsmcrOb4ug==}
+    engines: {node: '>= 20'}
+
   '@vitejs/plugin-react@6.0.1':
     resolution: {integrity: sha512-l9X/E3cDb+xY3SWzlG1MOGt2usfEHGMNIaegaUGFsLkb3RCn/k8/TOXBcab+OndDI4TBtktT8/9BwwW8Vi9KUQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -717,6 +753,12 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  ai@6.0.168:
+    resolution: {integrity: sha512-2HqCJuO+1V2aV7vfYs5LFEUfxbkGX+5oa54q/gCCTL7KLTdbxcCu5D7TdLA5kwsrs3Szgjah9q6D9tpjHM3hUQ==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
   aria-hidden@1.2.6:
     resolution: {integrity: sha512-ik3ZgC9dY/lYVVM++OISsaYDeg1tb0VtP5uL3ouh1koGOaUMDPpbFIei4JkFimWUFPn90sbMNMXQAIVOlnYKJA==}
     engines: {node: '>=10'}
@@ -744,6 +786,10 @@ packages:
 
   es-module-lexer@1.7.0:
     resolution: {integrity: sha512-jEQoCwk8hyb2AZziIOLhDqpm5+2ww5uIE6lkO/6jcOCusfk6LhMHpXXfBLXTZ7Ydyt0j4VoUQv6uGNYbdW+kBA==}
+
+  eventsource-parser@3.0.8:
+    resolution: {integrity: sha512-70QWGkr4snxr0OXLRWsFLeRBIRPuQOvt4s8QYjmUlmlkyTZkRqS7EDVRZtzU3TiyDbXSzaOeF0XUKy8PchzukQ==}
+    engines: {node: '>=18.0.0'}
 
   fdir@6.5.0:
     resolution: {integrity: sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==}
@@ -773,6 +819,9 @@ packages:
     peerDependenciesMeta:
       typescript:
         optional: true
+
+  json-schema@0.4.0:
+    resolution: {integrity: sha512-es94M3nTIfsEPisRafak+HDLfHXnKBhV3vU5eqPcS3flIWqcxJWgXHXiey3YrpaNsanY5ei1VoYEbOzijuq9BA==}
 
   lightningcss-android-arm64@1.32.0:
     resolution: {integrity: sha512-YK7/ClTt4kAK0vo6w3X+Pnm0D2cf2vPHbhOXdoNti1Ga0al1P4TBZhwjATvjNwLEBCnKvjJc2jQgHXH0NEwlAg==}
@@ -1051,9 +1100,38 @@ packages:
       utf-8-validate:
         optional: true
 
+  zod@4.3.6:
+    resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
+
 snapshots:
 
+  '@ai-sdk/gateway@3.0.104(zod@4.3.6)':
+    dependencies:
+      '@ai-sdk/provider': 3.0.8
+      '@ai-sdk/provider-utils': 4.0.23(zod@4.3.6)
+      '@vercel/oidc': 3.2.0
+      zod: 4.3.6
+
+  '@ai-sdk/google@3.0.64(zod@4.3.6)':
+    dependencies:
+      '@ai-sdk/provider': 3.0.8
+      '@ai-sdk/provider-utils': 4.0.23(zod@4.3.6)
+      zod: 4.3.6
+
+  '@ai-sdk/provider-utils@4.0.23(zod@4.3.6)':
+    dependencies:
+      '@ai-sdk/provider': 3.0.8
+      '@standard-schema/spec': 1.1.0
+      eventsource-parser: 3.0.8
+      zod: 4.3.6
+
+  '@ai-sdk/provider@3.0.8':
+    dependencies:
+      json-schema: 0.4.0
+
   '@babel/runtime@7.29.2': {}
+
+  '@opentelemetry/api@1.9.0': {}
 
   '@oxc-project/runtime@0.126.0': {}
 
@@ -1367,6 +1445,8 @@ snapshots:
     dependencies:
       csstype: 3.2.3
 
+  '@vercel/oidc@3.2.0': {}
+
   '@vitejs/plugin-react@6.0.1(@voidzero-dev/vite-plus-core@0.1.19(@types/node@25.6.0)(typescript@6.0.3))':
     dependencies:
       '@rolldown/pluginutils': 1.0.0-rc.7
@@ -1401,7 +1481,7 @@ snapshots:
   '@voidzero-dev/vite-plus-linux-x64-musl@0.1.19':
     optional: true
 
-  '@voidzero-dev/vite-plus-test@0.1.19(@types/node@25.6.0)(@voidzero-dev/vite-plus-core@0.1.19(@types/node@25.6.0)(typescript@6.0.3))(typescript@6.0.3)':
+  '@voidzero-dev/vite-plus-test@0.1.19(@opentelemetry/api@1.9.0)(@types/node@25.6.0)(@voidzero-dev/vite-plus-core@0.1.19(@types/node@25.6.0)(typescript@6.0.3))(typescript@6.0.3)':
     dependencies:
       '@standard-schema/spec': 1.1.0
       '@types/chai': 5.2.3
@@ -1418,6 +1498,7 @@ snapshots:
       vite: '@voidzero-dev/vite-plus-core@0.1.19(@types/node@25.6.0)(typescript@6.0.3)'
       ws: 8.20.0
     optionalDependencies:
+      '@opentelemetry/api': 1.9.0
       '@types/node': 25.6.0
     transitivePeerDependencies:
       - '@arethetypeswrong/core'
@@ -1446,6 +1527,14 @@ snapshots:
   '@voidzero-dev/vite-plus-win32-x64-msvc@0.1.19':
     optional: true
 
+  ai@6.0.168(zod@4.3.6):
+    dependencies:
+      '@ai-sdk/gateway': 3.0.104(zod@4.3.6)
+      '@ai-sdk/provider': 3.0.8
+      '@ai-sdk/provider-utils': 4.0.23(zod@4.3.6)
+      '@opentelemetry/api': 1.9.0
+      zod: 4.3.6
+
   aria-hidden@1.2.6:
     dependencies:
       tslib: 2.8.1
@@ -1466,6 +1555,8 @@ snapshots:
 
   es-module-lexer@1.7.0: {}
 
+  eventsource-parser@3.0.8: {}
+
   fdir@6.5.0(picomatch@4.0.4):
     optionalDependencies:
       picomatch: 4.0.4
@@ -1482,6 +1573,8 @@ snapshots:
   i18next@26.0.8(typescript@6.0.3):
     optionalDependencies:
       typescript: 6.0.3
+
+  json-schema@0.4.0: {}
 
   lightningcss-android-arm64@1.32.0:
     optional: true
@@ -1712,11 +1805,11 @@ snapshots:
     dependencies:
       react: 19.2.5
 
-  vite-plus@0.1.19(@types/node@25.6.0)(@voidzero-dev/vite-plus-core@0.1.19(@types/node@25.6.0)(typescript@6.0.3))(typescript@6.0.3):
+  vite-plus@0.1.19(@opentelemetry/api@1.9.0)(@types/node@25.6.0)(@voidzero-dev/vite-plus-core@0.1.19(@types/node@25.6.0)(typescript@6.0.3))(typescript@6.0.3):
     dependencies:
       '@oxc-project/types': 0.126.0
       '@voidzero-dev/vite-plus-core': 0.1.19(@types/node@25.6.0)(typescript@6.0.3)
-      '@voidzero-dev/vite-plus-test': 0.1.19(@types/node@25.6.0)(@voidzero-dev/vite-plus-core@0.1.19(@types/node@25.6.0)(typescript@6.0.3))(typescript@6.0.3)
+      '@voidzero-dev/vite-plus-test': 0.1.19(@opentelemetry/api@1.9.0)(@types/node@25.6.0)(@voidzero-dev/vite-plus-core@0.1.19(@types/node@25.6.0)(typescript@6.0.3))(typescript@6.0.3)
       oxfmt: 0.45.0
       oxlint: 1.60.0(oxlint-tsgolint@0.21.1)
       oxlint-tsgolint: 0.21.1
@@ -1762,3 +1855,5 @@ snapshots:
   void-elements@3.1.0: {}
 
   ws@8.20.0: {}
+
+  zod@4.3.6: {}
