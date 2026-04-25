@@ -32,6 +32,7 @@ export interface ProcessGuide {
   estimatedTime: string;
   contactLinks: ContactLink[];
   sourceType: "community-contributed";
+  createdBy?: string;
   version: number;
   updatedAt: string;
   alternativeOf?: string;

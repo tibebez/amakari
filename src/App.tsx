@@ -3,12 +3,19 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { mockGuides } from "./data.mock";
+import {
+  createAccount,
+  loadPersistedState,
+  saveGuideFeedback,
+  saveFavoriteGuideIds,
+  saveProgress,
+  saveUserGuides,
+  signIn,
+  signOut,
+} from "./sqliteStore";
 
 import type { ProcessGuide } from "./types";
-
-const PROGRESS_STORAGE_KEY = "process-path-progress";
-const USER_GUIDES_STORAGE_KEY = "process-path-user-guides";
-const FAVORITES_STORAGE_KEY = "process-path-favorite-guides";
+import type { AuthUser, GuideFeedback } from "./sqliteStore";
 
 type ProgressByGuide = Record<string, Record<string, boolean>>;
 type UploadStatus = { type: "success" | "error"; message: string } | null;
@@ -17,7 +24,6 @@ type ChatMessage = {
   role: "assistant" | "user";
   content: string;
 };
-type ChatByGuide = Record<string, ChatMessage[]>;
 type ProcessReference = {
   id: string;
   title: string;
@@ -31,6 +37,7 @@ type AiAggregatedReply = {
   answer: string;
   references: ProcessReference[];
 };
+type AuthMode = "sign-in" | "create-account";
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
@@ -68,6 +75,7 @@ function isProcessGuide(value: unknown): value is ProcessGuide {
     value.sourceType === "community-contributed" &&
     typeof value.version === "number" &&
     typeof value.updatedAt === "string" &&
+    (value.createdBy === undefined || typeof value.createdBy === "string") &&
     (value.alternativeOf === undefined || typeof value.alternativeOf === "string") &&
     Array.isArray(steps) &&
     steps.every(
@@ -84,63 +92,6 @@ function isProcessGuide(value: unknown): value is ProcessGuide {
         typeof step.sourceReferenceUrl === "string",
     )
   );
-}
-
-function getInitialProgress(): ProgressByGuide {
-  const raw = localStorage.getItem(PROGRESS_STORAGE_KEY);
-  if (!raw) {
-    return {};
-  }
-
-  try {
-    return JSON.parse(raw) as ProgressByGuide;
-  } catch {
-    return {};
-  }
-}
-
-function getInitialUserGuides(): ProcessGuide[] {
-  const raw = localStorage.getItem(USER_GUIDES_STORAGE_KEY);
-  if (!raw) {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    return parsed.filter(isProcessGuide);
-  } catch {
-    return [];
-  }
-}
-
-function saveProgress(progress: ProgressByGuide): void {
-  localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(progress));
-}
-
-function saveUserGuides(guides: ProcessGuide[]): void {
-  localStorage.setItem(USER_GUIDES_STORAGE_KEY, JSON.stringify(guides));
-}
-
-function getInitialFavoriteGuideIds(): string[] {
-  const raw = localStorage.getItem(FAVORITES_STORAGE_KEY);
-  if (!raw) {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    return isStringArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveFavoriteGuideIds(guideIds: string[]): void {
-  localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(guideIds));
 }
 
 function checklistContent(guide: ProcessGuide, completed: Record<string, boolean>): string {
@@ -265,7 +216,7 @@ function parseAiAggregatedReply(
 export function App() {
   const { t, i18n } = useTranslation();
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
-  const chatThreadRef = useRef<HTMLDivElement | null>(null);
+  const feedbackThreadRef = useRef<HTMLDivElement | null>(null);
   const floatingChatThreadRef = useRef<HTMLDivElement | null>(null);
 
   const [query, setQuery] = useState("");
@@ -273,15 +224,24 @@ export function App() {
   const [institution, setInstitution] = useState("all");
   const [region, setRegion] = useState("all");
   const [selectedGuideId, setSelectedGuideId] = useState<string | null>(null);
-  const [progress, setProgress] = useState<ProgressByGuide>(() => getInitialProgress());
-  const [userGuides, setUserGuides] = useState<ProcessGuide[]>(() => getInitialUserGuides());
+  const [progress, setProgress] = useState<ProgressByGuide>({});
+  const [userGuides, setUserGuides] = useState<ProcessGuide[]>([]);
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  const [guideFeedback, setGuideFeedback] = useState<GuideFeedback[]>([]);
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>(null);
-  const [chatByGuide, setChatByGuide] = useState<ChatByGuide>({});
-  const [chatInput, setChatInput] = useState("");
-  const [favoriteGuideIds, setFavoriteGuideIds] = useState<string[]>(() =>
-    getInitialFavoriteGuideIds(),
-  );
+  const [feedbackInput, setFeedbackInput] = useState("");
+  const [favoriteGuideIds, setFavoriteGuideIds] = useState<string[]>([]);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<AuthMode>("sign-in");
+  const [authUsername, setAuthUsername] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
+  const [pendingUploadAfterAuth, setPendingUploadAfterAuth] = useState(false);
+  const [editingGuideId, setEditingGuideId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [editError, setEditError] = useState("");
   const [isFloatingChatOpen, setIsFloatingChatOpen] = useState(false);
   const [isFloatingChatLoading, setIsFloatingChatLoading] = useState(false);
   const [floatingChatInput, setFloatingChatInput] = useState("");
@@ -292,7 +252,29 @@ export function App() {
     ),
   ]);
 
-  const useLocalStorage = true;
+  useEffect(() => {
+    let isMounted = true;
+
+    void loadPersistedState()
+      .then((state) => {
+        if (!isMounted) {
+          return;
+        }
+
+        setProgress(state.progress);
+        setFavoriteGuideIds(state.favorites);
+        setUserGuides(state.userGuides.filter(isProcessGuide));
+        setCurrentUser(state.currentUser);
+        setGuideFeedback(state.feedback);
+      })
+      .catch((error) => {
+        console.error("Failed to load persisted SQLite state", error);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const allGuides = useMemo(() => {
     const byId = new Map<string, ProcessGuide>();
@@ -350,8 +332,20 @@ export function App() {
   }, [allGuides, category, favoriteGuideIdSet, favoritesOnly, institution, query, region]);
 
   const selectedGuide = selectedGuideId
-    ? (filteredGuides.find((guide) => guide.id === selectedGuideId) ?? null)
+    ? (allGuides.find((guide) => guide.id === selectedGuideId) ?? null)
     : null;
+  const selectedGuideOwner = selectedGuide?.createdBy?.trim() ?? "";
+  const isSelectedGuideOwner = Boolean(
+    selectedGuide &&
+    currentUser &&
+    selectedGuideOwner &&
+    currentUser.username === selectedGuideOwner,
+  );
+  const guidesFromSelectedOwner = selectedGuideOwner
+    ? allGuides.filter(
+        (guide) => guide.createdBy === selectedGuideOwner && guide.id !== selectedGuide?.id,
+      )
+    : [];
 
   useEffect(() => {
     if (!selectedGuideId) {
@@ -364,38 +358,21 @@ export function App() {
     }
   }, [filteredGuides, selectedGuideId]);
 
-  useEffect(() => {
-    if (!selectedGuide) {
-      return;
-    }
-
-    setChatByGuide((current) => {
-      if (current[selectedGuide.id]) {
-        return current;
-      }
-
-      return {
-        ...current,
-        [selectedGuide.id]: [],
-      };
-    });
-
-    setChatInput("");
-  }, [selectedGuide, t]);
-
   const selectedProgress = selectedGuide ? (progress[selectedGuide.id] ?? {}) : {};
-  const selectedChat = selectedGuide ? (chatByGuide[selectedGuide.id] ?? []) : [];
+  const selectedGuideFeedback = selectedGuide
+    ? guideFeedback.filter((entry) => entry.guideId === selectedGuide.id)
+    : [];
 
   useEffect(() => {
-    if (!chatThreadRef.current) {
+    if (!feedbackThreadRef.current) {
       return;
     }
 
-    chatThreadRef.current.scrollTo({
-      top: chatThreadRef.current.scrollHeight,
+    feedbackThreadRef.current.scrollTo({
+      top: feedbackThreadRef.current.scrollHeight,
       behavior: "smooth",
     });
-  }, [selectedGuide?.id, selectedChat.length]);
+  }, [selectedGuide?.id, selectedGuideFeedback.length]);
 
   useEffect(() => {
     if (!floatingChatThreadRef.current) {
@@ -407,6 +384,15 @@ export function App() {
       behavior: "smooth",
     });
   }, [floatingChatMessages.length, isFloatingChatOpen]);
+
+  useEffect(() => {
+    if (!pendingUploadAfterAuth || !currentUser) {
+      return;
+    }
+
+    setPendingUploadAfterAuth(false);
+    uploadInputRef.current?.click();
+  }, [currentUser, pendingUploadAfterAuth]);
 
   const completedSteps = selectedGuide
     ? selectedGuide.steps.filter((step) => selectedProgress[step.id]).length
@@ -426,7 +412,7 @@ export function App() {
           [stepId]: !guideProgress[stepId],
         },
       };
-      saveProgress(nextProgress);
+      void saveProgress(nextProgress);
       return nextProgress;
     });
   };
@@ -435,12 +421,21 @@ export function App() {
     setFavoriteGuideIds((current) => {
       const isFavorite = current.includes(guideId);
       const next = isFavorite ? current.filter((id) => id !== guideId) : [...current, guideId];
-      saveFavoriteGuideIds(next);
+      void saveFavoriteGuideIds(next);
       return next;
     });
   };
 
   const handleGuideUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!currentUser) {
+      setUploadStatus({
+        type: "error",
+        message: t("authRequiredUpload"),
+      });
+      event.target.value = "";
+      return;
+    }
+
     const file = event.target.files?.[0];
     if (!file) {
       return;
@@ -459,11 +454,15 @@ export function App() {
         const byId = new Map<string, ProcessGuide>(current.map((guide) => [guide.id, guide]));
 
         for (const guide of uploadedGuides) {
-          byId.set(guide.id, guide);
+          byId.set(guide.id, {
+            ...guide,
+            createdBy: currentUser.username,
+            updatedAt: new Date().toISOString().slice(0, 10),
+          });
         }
 
         const nextGuides = [...byId.values()];
-        saveUserGuides(nextGuides);
+        void saveUserGuides(nextGuides);
         return nextGuides;
       });
 
@@ -496,28 +495,133 @@ export function App() {
     URL.revokeObjectURL(url);
   };
 
-
-  const sendChatMessage = () => {
-    if (!selectedGuide) {
+  const handleUploadButtonClick = () => {
+    if (!currentUser) {
+      setPendingUploadAfterAuth(true);
+      setAuthMode("sign-in");
+      setAuthError("");
+      setIsAuthModalOpen(true);
       return;
     }
 
-    const question = chatInput.trim();
-    if (!question) {
+    uploadInputRef.current?.click();
+  };
+
+  const submitAuth = async () => {
+    const username = authUsername.trim();
+    const password = authPassword.trim();
+
+    if (!username || !password) {
+      setAuthError(t("authFillAllFields"));
       return;
     }
 
-    const userMessage = createMessage("user", question);
+    setIsAuthSubmitting(true);
+    setAuthError("");
 
-    setChatByGuide((current) => {
-      const currentThread = current[selectedGuide.id] ?? [];
-      return {
-        ...current,
-        [selectedGuide.id]: [...currentThread, userMessage],
+    try {
+      const nextUser =
+        authMode === "create-account"
+          ? await createAccount(username, password)
+          : await signIn(username, password);
+      setCurrentUser(nextUser);
+      setIsAuthModalOpen(false);
+      setAuthPassword("");
+      setUploadStatus(null);
+    } catch (error) {
+      if (error instanceof Error && error.message === "username-exists") {
+        setAuthError(t("authUsernameExists"));
+      } else {
+        setAuthError(t("authInvalidCredentials"));
+      }
+    } finally {
+      setIsAuthSubmitting(false);
+    }
+  };
+
+  const handleSignOut = () => {
+    setCurrentUser(null);
+    void signOut();
+  };
+
+  const postFeedback = () => {
+    if (!selectedGuide || !currentUser) {
+      return;
+    }
+
+    const message = feedbackInput.trim();
+    if (!message) {
+      return;
+    }
+
+    setGuideFeedback((current) => {
+      const nextEntry: GuideFeedback = {
+        id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        guideId: selectedGuide.id,
+        username: currentUser.username,
+        message,
+        createdAt: new Date().toISOString(),
       };
+      const next = [...current, nextEntry];
+      void saveGuideFeedback(next);
+      return next;
     });
 
-    setChatInput("");
+    setFeedbackInput("");
+  };
+
+  const startEditingGuide = () => {
+    if (!selectedGuide || !isSelectedGuideOwner) {
+      return;
+    }
+
+    setEditingGuideId(selectedGuide.id);
+    setEditError("");
+    setEditDraft(JSON.stringify(selectedGuide, null, 2));
+  };
+
+  const saveEditedGuide = () => {
+    if (!selectedGuide || !isSelectedGuideOwner || !editingGuideId || !currentUser) {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(editDraft) as unknown;
+      if (!isProcessGuide(parsed)) {
+        throw new Error("invalid-format");
+      }
+
+      if (parsed.id !== selectedGuide.id) {
+        throw new Error("id-mismatch");
+      }
+
+      const updatedGuide: ProcessGuide = {
+        ...parsed,
+        createdBy: currentUser.username,
+        updatedAt: new Date().toISOString().slice(0, 10),
+      };
+
+      setUserGuides((current) => {
+        const byId = new Map<string, ProcessGuide>(current.map((guide) => [guide.id, guide]));
+        byId.set(updatedGuide.id, updatedGuide);
+        const nextGuides = [...byId.values()];
+        void saveUserGuides(nextGuides);
+        return nextGuides;
+      });
+
+      setEditingGuideId(null);
+      setEditDraft("");
+      setUploadStatus({
+        type: "success",
+        message: t("editProcessSuccess"),
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === "id-mismatch") {
+        setEditError(t("editProcessIdLocked"));
+      } else {
+        setEditError(t("editProcessError"));
+      }
+    }
   };
 
   const openGuideFromReference = (guideId: string) => {
@@ -636,6 +740,27 @@ export function App() {
           <p>{t("appSubtitle")}</p>
         </div>
         <div className="topbar-actions">
+          {currentUser ? (
+            <div className="auth-chip">
+              <span>{t("loggedInAs", { username: currentUser.username })}</span>
+              <button type="button" className="auth-link-btn" onClick={handleSignOut}>
+                {t("signOut")}
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="auth-link-btn"
+              onClick={() => {
+                setPendingUploadAfterAuth(false);
+                setAuthMode("sign-in");
+                setAuthError("");
+                setIsAuthModalOpen(true);
+              }}
+            >
+              {t("signIn")}
+            </button>
+          )}
           <label htmlFor="lang-select">{t("language")}</label>
           <select
             id="lang-select"
@@ -649,13 +774,6 @@ export function App() {
           </select>
         </div>
       </header>
-
-      <section className="status-banner">
-        <p>{t("signInHint")}</p>
-        <small>
-          Local Storage: <strong>{useLocalStorage ? "enabled" : "disabled"}</strong>
-        </small>
-      </section>
 
       <section className="upload-panel" aria-live="polite">
         <div>
@@ -672,11 +790,7 @@ export function App() {
               void handleGuideUpload(event);
             }}
           />
-          <button
-            type="button"
-            className="upload-trigger"
-            onClick={() => uploadInputRef.current?.click()}
-          >
+          <button type="button" className="upload-trigger" onClick={handleUploadButtonClick}>
             {t("uploadProcessCta")}
           </button>
         </div>
@@ -791,6 +905,11 @@ export function App() {
               <div className="dialog-header">
                 <h2>{selectedGuide.title}</h2>
                 <div className="dialog-header-actions">
+                  {isSelectedGuideOwner ? (
+                    <button type="button" className="favorite-btn" onClick={startEditingGuide}>
+                      {t("editProcess")}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className={`favorite-btn ${favoriteGuideIdSet.has(selectedGuide.id) ? "is-favorite" : ""}`}
@@ -816,6 +935,11 @@ export function App() {
                   <p>
                     {t("updatedAt")}: {selectedGuide.updatedAt}
                   </p>
+                  {selectedGuide.createdBy ? (
+                    <p>
+                      {t("postedBy")}: {selectedGuide.createdBy}
+                    </p>
+                  ) : null}
                 </div>
 
                 <div className="facts-grid">
@@ -843,6 +967,11 @@ export function App() {
                       <li>
                         <strong>{t("sourceType")}:</strong> {selectedGuide.sourceType}
                       </li>
+                      {selectedGuide.createdBy ? (
+                        <li>
+                          <strong>{t("postedBy")}:</strong> {selectedGuide.createdBy}
+                        </li>
+                      ) : null}
                     </ul>
                   </article>
 
@@ -891,43 +1020,6 @@ export function App() {
                   </div>
                 </div>
 
-                <section className="chat-panel">
-                  <div className="chat-panel-header">
-                    <h3>{t("chatTitle")}</h3>
-                  </div>
-
-                  <div className="chat-thread" ref={chatThreadRef} aria-live="polite">
-                    {selectedChat.map((message) => (
-                      <article
-                        key={message.id}
-                        className={`chat-message chat-message-${message.role}`}
-                      >
-                        <small>
-                          {message.role === "assistant"
-                            ? t("chatAssistantLabel")
-                            : t("chatUserLabel")}
-                        </small>
-                        <p>{message.content}</p>
-                      </article>
-                    ))}
-                  </div>
-
-                  <form
-                    className="chat-form"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      sendChatMessage();
-                    }}
-                  >
-                    <input
-                      value={chatInput}
-                      onChange={(event) => setChatInput(event.target.value)}
-                      placeholder={t("chatPlaceholder")}
-                    />
-                    <button type="submit">{t("chatSend")}</button>
-                  </form>
-                </section>
-
                 <ol className="step-list">
                   {selectedGuide.steps.map((step) => (
                     <li key={step.id}>
@@ -972,11 +1064,157 @@ export function App() {
                     </li>
                   ))}
                 </ol>
+
+                <section className="chat-panel">
+                  <div className="chat-panel-header">
+                    <h3>{t("chatTitle")}</h3>
+                    <p>{t("chatHint")}</p>
+                  </div>
+
+                  {currentUser ? (
+                    <form
+                      className="chat-form"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        postFeedback();
+                      }}
+                    >
+                      <input
+                        value={feedbackInput}
+                        onChange={(event) => setFeedbackInput(event.target.value)}
+                        placeholder={t("chatPlaceholder")}
+                      />
+                      <button type="submit">{t("chatSend")}</button>
+                    </form>
+                  ) : (
+                    <p className="auth-feed-hint">{t("authRequiredFeedback")}</p>
+                  )}
+
+                  <div className="chat-thread" ref={feedbackThreadRef} aria-live="polite">
+                    {selectedGuideFeedback.length > 0 ? (
+                      selectedGuideFeedback.map((entry) => (
+                        <article key={entry.id} className="chat-message chat-message-user">
+                          <small>
+                            {entry.username} • {new Date(entry.createdAt).toLocaleString()}
+                          </small>
+                          <p>{entry.message}</p>
+                        </article>
+                      ))
+                    ) : (
+                      <p className="auth-feed-hint">{t("noFeedYet")}</p>
+                    )}
+                  </div>
+                </section>
+
+                {selectedGuideOwner ? (
+                  <section className="chat-panel">
+                    <div className="chat-panel-header">
+                      <h3>{t("ownerOtherProcesses", { username: selectedGuideOwner })}</h3>
+                    </div>
+                    <div className="owner-guides-list">
+                      {guidesFromSelectedOwner.length > 0 ? (
+                        guidesFromSelectedOwner.map((guide) => (
+                          <button
+                            type="button"
+                            key={guide.id}
+                            className="owner-guide-item"
+                            onClick={() => setSelectedGuideId(guide.id)}
+                          >
+                            {guide.title}
+                          </button>
+                        ))
+                      ) : (
+                        <p className="auth-feed-hint">{t("ownerNoOtherProcesses")}</p>
+                      )}
+                    </div>
+                  </section>
+                ) : null}
               </div>
             </dialog>
           </div>
         )}
       </section>
+
+      {isAuthModalOpen ? (
+        <div className="dialog-overlay auth-overlay" onClick={() => setIsAuthModalOpen(false)}>
+          <dialog className="auth-dialog" open onClick={(event) => event.stopPropagation()}>
+            <h2>{authMode === "sign-in" ? t("authSignInTitle") : t("authCreateTitle")}</h2>
+            <p>{t("authPopupHint")}</p>
+            <label className="auth-field">
+              <span>{t("authUsername")}</span>
+              <input
+                value={authUsername}
+                onChange={(event) => setAuthUsername(event.target.value)}
+                autoComplete="username"
+              />
+            </label>
+            <label className="auth-field">
+              <span>{t("authPassword")}</span>
+              <input
+                type="password"
+                value={authPassword}
+                onChange={(event) => setAuthPassword(event.target.value)}
+                autoComplete={authMode === "sign-in" ? "current-password" : "new-password"}
+              />
+            </label>
+            {authError ? <p className="upload-message upload-message-error">{authError}</p> : null}
+            <div className="auth-actions">
+              <button
+                type="button"
+                className="upload-trigger"
+                onClick={() => void submitAuth()}
+                disabled={isAuthSubmitting}
+              >
+                {isAuthSubmitting
+                  ? t("authSubmitting")
+                  : authMode === "sign-in"
+                    ? t("signIn")
+                    : t("createAccount")}
+              </button>
+              <button
+                type="button"
+                className="favorite-btn"
+                onClick={() =>
+                  setAuthMode((current) => (current === "sign-in" ? "create-account" : "sign-in"))
+                }
+              >
+                {authMode === "sign-in" ? t("switchToCreate") : t("switchToSignIn")}
+              </button>
+            </div>
+          </dialog>
+        </div>
+      ) : null}
+
+      {editingGuideId ? (
+        <div className="dialog-overlay auth-overlay" onClick={() => setEditingGuideId(null)}>
+          <dialog
+            className="auth-dialog edit-dialog"
+            open
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2>{t("editProcess")}</h2>
+            <p>{t("editProcessHint")}</p>
+            <textarea
+              className="edit-json"
+              value={editDraft}
+              onChange={(event) => setEditDraft(event.target.value)}
+            />
+            {editError ? <p className="upload-message upload-message-error">{editError}</p> : null}
+            <div className="auth-actions">
+              <button type="button" className="upload-trigger" onClick={saveEditedGuide}>
+                {t("saveChanges")}
+              </button>
+              <button
+                type="button"
+                className="favorite-btn"
+                onClick={() => setEditingGuideId(null)}
+              >
+                {t("cancel")}
+              </button>
+            </div>
+          </dialog>
+        </div>
+      ) : null}
 
       <div className="floating-chat-root">
         {isFloatingChatOpen ? (

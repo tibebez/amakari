@@ -98,6 +98,26 @@ ol {
   min-width: max-content;
 }
 
+.auth-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  padding: 0.4rem 0.65rem;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.auth-link-btn {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-main);
+  padding: 0.45rem 0.7rem;
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+
 .topbar-actions label {
   font-size: 0.875rem;
   font-weight: 500;
@@ -702,6 +722,97 @@ select:hover {
 .chat-form button:hover {
   background: var(--color-accent-hover);
   border-color: var(--color-accent-hover);
+}
+
+.auth-feed-hint {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.owner-guides-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.owner-guide-item {
+  text-align: left;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text-main);
+  padding: 0.65rem 0.8rem;
+  cursor: pointer;
+}
+
+.owner-guide-item:hover {
+  border-color: var(--color-accent);
+}
+
+.auth-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.auth-dialog {
+  position: relative;
+  margin: 0;
+  border: 1px solid var(--color-border);
+  width: min(460px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  background: var(--color-surface);
+  padding: 1.5rem;
+  display: grid;
+  gap: 0.9rem;
+  overflow: auto;
+}
+
+.auth-dialog h2 {
+  font-size: 1.4rem;
+}
+
+.auth-dialog p {
+  color: var(--color-text-muted);
+  font-size: 0.92rem;
+}
+
+.auth-field {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.auth-field span {
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+.auth-field input {
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text-main);
+  padding: 0.6rem 0.75rem;
+}
+
+.auth-actions {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.edit-dialog {
+  width: min(860px, calc(100vw - 2rem));
+}
+
+.edit-json {
+  min-height: 320px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text-main);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.84rem;
+  padding: 0.75rem;
 }
 
 .floating-chat-root {

@@ -16,7 +16,8 @@ export const mockGuides: ProcessGuide[] = [
       "Proof of address (if requested)",
     ],
     fees: "Usually no account opening fee; minimum opening balance may apply.",
-    deadlines: "No strict deadline. Account can usually be opened the same day if documents are complete.",
+    deadlines:
+      "No strict deadline. Account can usually be opened the same day if documents are complete.",
     estimatedTime: "30-90 minutes",
     contactLinks: [
       {
@@ -31,7 +32,8 @@ export const mockGuides: ProcessGuide[] = [
       {
         id: "dashen-open-step-1",
         title: "Prepare required documents",
-        description: "Gather your ID, photos, and mobile number details before visiting the branch.",
+        description:
+          "Gather your ID, photos, and mobile number details before visiting the branch.",
         requiredDocuments: ["Government-issued ID", "Passport-size photos"],
         cost: "$0",
         expectedDuration: "10-20 minutes",
@@ -42,7 +44,8 @@ export const mockGuides: ProcessGuide[] = [
       {
         id: "dashen-open-step-2",
         title: "Complete account opening form at branch",
-        description: "Ask customer service for the form, fill it, and submit it with your documents.",
+        description:
+          "Ask customer service for the form, fill it, and submit it with your documents.",
         requiredDocuments: ["Completed application form", "Government-issued ID"],
         cost: "$0",
         expectedDuration: "15-30 minutes",
@@ -53,7 +56,8 @@ export const mockGuides: ProcessGuide[] = [
       {
         id: "dashen-open-step-3",
         title: "Make initial deposit and receive account details",
-        description: "Deposit the required amount and collect your account number and activation details.",
+        description:
+          "Deposit the required amount and collect your account number and activation details.",
         requiredDocuments: ["Deposit amount", "Approved account form"],
         cost: "Minimum deposit depends on account type",
         expectedDuration: "10-40 minutes",
@@ -78,7 +82,8 @@ export const mockGuides: ProcessGuide[] = [
       "Proof of address (if requested)",
     ],
     fees: "Usually no account opening fee; minimum opening balance may apply.",
-    deadlines: "No strict deadline. Account can usually be opened the same day if documents are complete.",
+    deadlines:
+      "No strict deadline. Account can usually be opened the same day if documents are complete.",
     estimatedTime: "30-90 minutes",
     contactLinks: [
       {
@@ -93,7 +98,8 @@ export const mockGuides: ProcessGuide[] = [
       {
         id: "dashen-step-1",
         title: "Prepare required documents",
-        description: "Gather your ID, photos, and any supporting residence information before visiting the branch.",
+        description:
+          "Gather your ID, photos, and any supporting residence information before visiting the branch.",
         requiredDocuments: ["Government-issued ID", "Passport-size photos"],
         cost: "$0",
         expectedDuration: "10-20 minutes",
@@ -104,7 +110,8 @@ export const mockGuides: ProcessGuide[] = [
       {
         id: "dashen-step-2",
         title: "Visit nearest Dashen Bank branch and fill account opening form",
-        description: "Request an account opening form, complete it, and submit it to the customer service desk.",
+        description:
+          "Request an account opening form, complete it, and submit it to the customer service desk.",
         requiredDocuments: ["Completed application form", "Government-issued ID"],
         cost: "$0",
         expectedDuration: "15-30 minutes",
@@ -115,7 +122,8 @@ export const mockGuides: ProcessGuide[] = [
       {
         id: "dashen-step-3",
         title: "Make initial deposit and activate account",
-        description: "Deposit the required minimum balance, receive account details, and set up mobile/SMS alerts if available.",
+        description:
+          "Deposit the required minimum balance, receive account details, and set up mobile/SMS alerts if available.",
         requiredDocuments: ["Deposit amount", "Approved account form"],
         cost: "Minimum deposit depends on account type",
         expectedDuration: "10-40 minutes",

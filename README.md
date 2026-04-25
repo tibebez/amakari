@@ -7,17 +7,17 @@ Information guidance web app for step-by-step institutional processes.
 - Public process discovery (keyword, category, institution, region)
 - Favorite processes + favorites-only filtering for faster repeat search
 - Detailed process + step checklist
-- Guest progress tracking in browser storage
+- Local SQLite (browser) persistence for progress, favorites, and uploaded guides
 - Print and download checklist
 - Community-contributed source model (`community-contributed`)
 - i18n-ready UI (English + Amharic)
-- Supabase-ready schema and client setup
+- One-time migration of legacy localStorage data into SQLite
 
 ## Stack
 
 - React + TypeScript
 - Vite+
-- Supabase (Auth + Postgres)
+- SQL.js (SQLite in browser)
 
 ## Run locally
 
@@ -45,13 +45,7 @@ VITE_GEMINI_API_KEY="your_gemini_api_key"
 
 Model used: `gemini-2.5-flash` via Vercel AI SDK (`ai` + `@ai-sdk/google`).
 
-## Supabase setup
-
-1. Create a Supabase project.
-2. Add keys to `.env.local`.
-3. Run migration in `supabase/migrations/20260425093000_initial.sql`.
-
 ## Notes
 
-- Without Supabase env vars, app works in guest mode using `localStorage`.
+- Existing `localStorage` keys are imported once into SQLite automatically.
 - Current data is mocked in `src/data.mock.ts` for prototype/demo use.
