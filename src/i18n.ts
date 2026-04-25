@@ -1,0 +1,87 @@
+import i18n from "i18next";
+import { initReactI18next } from "react-i18next";
+
+void i18n.use(initReactI18next).init({
+  lng: "en",
+  fallbackLng: "en",
+  resources: {
+    en: {
+      translation: {
+        appTitle: "Amakari",
+        appSubtitle:
+          "Community-contributed guides for tax filing, driver's license registration, and business permits.",
+        filterTitle: "Find a process",
+        keyword: "Keyword",
+        category: "Category",
+        institution: "Institution",
+        region: "Region",
+        all: "All",
+        noResults: "No guides match your filters.",
+        steps: "Steps",
+        processDetails: "Process details",
+        prerequisites: "Prerequisites",
+        requiredDocuments: "Required documents",
+        fees: "Fees",
+        deadlines: "Deadlines",
+        estimatedTime: "Estimated time",
+        contactLinks: "Contact/help links",
+        sourceType: "Source type",
+        sourceReference: "Source reference",
+        officeOrUrl: "Office/URL",
+        mode: "Mode",
+        duration: "Duration",
+        cost: "Cost",
+        progress: "Progress",
+        checklist: "Checklist",
+        printChecklist: "Print checklist",
+        downloadChecklist: "Download checklist",
+        version: "Version",
+        updatedAt: "Updated",
+        language: "Language",
+        signInHint:
+          "Guest mode is enabled. Progress saves in this browser. Connect Supabase auth to sync across devices.",
+      },
+    },
+    am: {
+      translation: {
+        appTitle: "Amakari",
+        appSubtitle: "ግብር ለማሳወቅ፣ የመንጃ ፈቃድ ለማውጣት እና የንግድ ፈቃድ ለማግኘት የሚረዱ የማህበረሰብ መመሪያዎች።",
+        filterTitle: "ሂደት ይፈልጉ",
+        keyword: "ቁልፍ ቃል",
+        category: "ምድብ",
+        institution: "ተቋም",
+        region: "ክልል",
+        all: "ሁሉም",
+        noResults: "በእነዚህ ማጣሪያዎች ምንም መመሪያ አልተገኘም።",
+        steps: "ደረጃዎች",
+        processDetails: "የሂደቱ ዝርዝሮች",
+        prerequisites: "ቅድመ መስፈርቶች",
+        requiredDocuments: "አስፈላጊ ሰነዶች",
+        fees: "ክፍያዎች",
+        deadlines: "የመጨረሻ ቀናት",
+        estimatedTime: "የሚገመተው ጊዜ",
+        contactLinks: "የእውቂያ/እገዛ አገናኞች",
+        sourceType: "የምንጭ ዓይነት",
+        sourceReference: "የምንጭ ማጣቀሻ",
+        officeOrUrl: "ቢሮ/የድረ-ገጽ አድራሻ",
+        mode: "የአሰራር ዘዴ",
+        duration: "የሚወስደው ጊዜ",
+        cost: "ዋጋ",
+        progress: "ሂደት",
+        checklist: "ማረጋገጫ ዝርዝር",
+        printChecklist: "ማረጋገጫ ዝርዝሩን ያትሙ",
+        downloadChecklist: "ማረጋገጫ ዝርዝሩን ያውርዱ",
+        version: "ስሪት",
+        updatedAt: "የዘመነበት",
+        language: "ቋንቋ",
+        signInHint:
+          "የእንግዳ ሁነታ በርቷል። የእርስዎ ሂደት በዚህ ማሰሻ ውስጥ ይቀመጣል። በተለያዩ መሳሪያዎች ለማመሳሰል በSupabase ይግቡ።",
+      },
+    },
+  },
+  interpolation: {
+    escapeValue: false,
+  },
+});
+
+export { i18n };
