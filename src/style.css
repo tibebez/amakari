@@ -808,6 +808,22 @@ select:hover {
   color: var(--color-text-muted);
 }
 
+.floating-chat-reference-link {
+  border: none;
+  background: transparent;
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.floating-chat-reference-link:hover {
+  color: var(--color-accent-hover);
+}
+
 .step-list {
   display: flex;
   flex-direction: column;
