@@ -376,9 +376,7 @@ export function App() {
 
       return {
         ...current,
-        [selectedGuide.id]: [
-          createMessage("assistant", t("chatWelcome", { title: selectedGuide.title })),
-        ],
+        [selectedGuide.id]: [],
       };
     });
 
@@ -498,51 +496,6 @@ export function App() {
     URL.revokeObjectURL(url);
   };
 
-  const buildAssistantReply = (question: string, guide: ProcessGuide): string => {
-    const normalized = question.toLowerCase();
-    const nextStep = guide.steps.find((step) => !selectedProgress[step.id]);
-
-    if (normalized.includes("document") || normalized.includes("ሰነድ")) {
-      return t("chatReplyDocuments", { documents: guide.requiredDocuments.join(", ") });
-    }
-
-    if (normalized.includes("fee") || normalized.includes("cost") || normalized.includes("ዋጋ")) {
-      return t("chatReplyFees", { fees: guide.fees });
-    }
-
-    if (
-      normalized.includes("time") ||
-      normalized.includes("long") ||
-      normalized.includes("duration") ||
-      normalized.includes("ጊዜ")
-    ) {
-      return t("chatReplyTimeline", { duration: guide.estimatedTime });
-    }
-
-    if (
-      normalized.includes("contact") ||
-      normalized.includes("help") ||
-      normalized.includes("እገዛ")
-    ) {
-      const contacts = guide.contactLinks.map((link) => link.label).join(", ");
-      return t("chatReplyContact", { contacts: contacts || t("chatReplyContactFallback") });
-    }
-
-    if (
-      normalized.includes("next") ||
-      normalized.includes("start") ||
-      normalized.includes("step") ||
-      normalized.includes("ምን")
-    ) {
-      return t("chatReplyNextStep", {
-        step: nextStep?.title ?? guide.steps[guide.steps.length - 1]?.title ?? guide.title,
-      });
-    }
-
-    return t("chatReplyDefault", {
-      step: nextStep?.title ?? guide.steps[guide.steps.length - 1]?.title ?? guide.title,
-    });
-  };
 
   const sendChatMessage = () => {
     if (!selectedGuide) {
@@ -555,16 +508,12 @@ export function App() {
     }
 
     const userMessage = createMessage("user", question);
-    const assistantMessage = createMessage(
-      "assistant",
-      buildAssistantReply(question, selectedGuide),
-    );
 
     setChatByGuide((current) => {
       const currentThread = current[selectedGuide.id] ?? [];
       return {
         ...current,
-        [selectedGuide.id]: [...currentThread, userMessage, assistantMessage],
+        [selectedGuide.id]: [...currentThread, userMessage],
       };
     });
 
@@ -945,7 +894,6 @@ export function App() {
                 <section className="chat-panel">
                   <div className="chat-panel-header">
                     <h3>{t("chatTitle")}</h3>
-                    <p>{t("chatHint")}</p>
                   </div>
 
                   <div className="chat-thread" ref={chatThreadRef} aria-live="polite">
